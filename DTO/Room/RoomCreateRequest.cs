@@ -8,6 +8,7 @@ public class RoomCreateRequest
     MinimumLength = 2)]
     public string Name {get; set;} = string.Empty;
     [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "Capacity must be at least 1")]
     public int Capacity {get; set;}
     public bool IsActive {get; set;}
 }
