@@ -6,5 +6,5 @@ public class Reservation
     public DateTime EndAt {get; set;}
     public string ResponsibleName {get; set;} = string.Empty;
     public int RoomId {get; set;}
-    public Room Room {get; set;} = new Room();
+    public Room Room {get; set;} = null!;
 }

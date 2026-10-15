@@ -43,7 +43,7 @@ namespace ReservationAPI.Migrations
 
                     b.HasIndex("RoomId");
 
-                    b.ToTable("Reservation");
+                    b.ToTable("Reservations");
                 });
 
             modelBuilder.Entity("Room", b =>

@@ -6,5 +6,6 @@ public class AppDbContext : DbContext
     {        
     }
 
-    public DbSet<Room> Rooms {get; set;} 
+    public DbSet<Room> Rooms {get; set;}
+    public DbSet<Reservation> Reservations {get; set;}
 }
