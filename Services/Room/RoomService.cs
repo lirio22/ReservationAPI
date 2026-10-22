@@ -10,20 +10,19 @@ public class RoomService : IRoomService
 
     public async Task<List<RoomResponse>> GetAllRooms()
     {
-        return await _context.Rooms.AsNoTracking().Include(x => x.Reservations)
+        return await _context.Rooms.AsNoTracking()
         .Select(x => new RoomResponse
         {
             Id = x.Id,
             Name = x.Name,
             Capacity = x.Capacity,
             IsActive = x.IsActive,
-            Reservations = x.Reservations
         }).ToListAsync();
     }
 
     public async Task<RoomResponse?> GetRoomById(int id)
     {
-        Room? room = await _context.Rooms.AsNoTracking().Include(x => x.Reservations)
+        Room? room = await _context.Rooms.AsNoTracking()
         .Where(x => x.Id == id).FirstOrDefaultAsync();
 
         if(room is null)
@@ -54,12 +53,12 @@ public class RoomService : IRoomService
 
     public async Task<(string, RoomResponse?)> UpdateRoom(int id, RoomUpdateRequest request)
     {
-        Room? room = await _context.Rooms.Include(x => x.Reservations)
+        Room? room = await _context.Rooms
         .Where(x => x.Id == id).FirstOrDefaultAsync();
         if(room is null)
             return ("Id not found", null);
         
-        bool hasAny = await _context.Rooms.AnyAsync(x => x.Name == request.Name);
+        bool hasAny = await _context.Rooms.AnyAsync(x => x.Name == request.Name && x.Id != id);
         if(hasAny)
             return ("Room name already exists!", null);
 
@@ -97,7 +96,6 @@ public class RoomService : IRoomService
             Name = room.Name,
             Capacity = room.Capacity,
             IsActive = room.IsActive,
-            Reservations = room.Reservations
         };
     }
 }

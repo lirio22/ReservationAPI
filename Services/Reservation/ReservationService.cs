@@ -1,6 +1,4 @@
-using System.Runtime;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 
 public class ReservationService : IReservationService
 {
@@ -21,10 +19,15 @@ public class ReservationService : IReservationService
             reservations = reservations.Where(x => x.RoomId == roomId.Value);
 
         if(!string.IsNullOrEmpty(responsible))
-            reservations = reservations.Where(x => x.ResponsibleName == responsible);
+            reservations = reservations.Where(x => x.ResponsibleName.Contains(responsible));
 
         if(!string.IsNullOrEmpty(date))
-            reservations = reservations.Where(x => x.StartAt.Date.ToString().Contains(date));
+        {
+            DateTime requestDate;
+            
+            if(DateTime.TryParse(date, out requestDate))
+                reservations = reservations.Where(x => x.StartAt.Date == requestDate.Date);
+        }
 
         if(!string.IsNullOrEmpty(orderBy))
         {
@@ -52,21 +55,26 @@ public class ReservationService : IReservationService
                 break;
             }
         }
+        else
+        {
+            reservations = reservations.OrderBy(x => x.Id);
+        }
 
         int maxPageSize = _configuration.GetValue<int>("ReservationSettings:MaxPageSize");
         if(pageSize > maxPageSize)
             pageSize = maxPageSize;
         if(pageSize <= 0)
             pageSize = 10;
-        if(page < 0)
+        if(page < 1)
             page = 1;
 
-        reservations = reservations.Skip(page * pageSize - 1).Take(pageSize);
+        reservations = reservations.Skip((page - 1) * pageSize).Take(pageSize);
 
         return await reservations
         .AsNoTracking()
         .Select(x => new ReservationResponse
         {
+            Id = x.Id,
             Title = x.Title,
             StartAt = x.StartAt,
             EndAt = x.EndAt,
@@ -89,7 +97,7 @@ public class ReservationService : IReservationService
 
     public async Task<(ReservationStatusResponses, ReservationResponse?)> CreateNewReservation(ReservationCreateRequest request)
     {        
-        Room? room = await _context.Rooms.FindAsync(request.RoomId);
+        Room? room = await _context.Rooms.Where(x => x.Id == request.RoomId).FirstOrDefaultAsync();
 
         if(room is null)
             return (ReservationStatusResponses.RoomNotFound, null);
@@ -97,12 +105,15 @@ public class ReservationService : IReservationService
         if(!room.IsActive)
             return (ReservationStatusResponses.RoomInactive, null);
 
-        if(request.EndAt < request.StartAt)
+        if(request.EndAt <= request.StartAt)
             return (ReservationStatusResponses.InvalidTimeInterval, null);
 
-        if(room.Reservations.Any(x =>
-        x.StartAt < request.EndAt && x.StartAt > request.StartAt || 
-        x.EndAt > request.StartAt && x.EndAt < request.EndAt))
+        bool hasConflict = await _context.Reservations.AnyAsync(x =>
+        x.RoomId == request.RoomId &&
+        x.StartAt < request.EndAt &&
+        x.EndAt > request.StartAt);
+
+        if(hasConflict)
             return (ReservationStatusResponses.TimeAlreadyReserved, null);        
  
         Reservation reservation = new Reservation
@@ -124,7 +135,12 @@ public class ReservationService : IReservationService
 
     public async Task<(ReservationStatusResponses, ReservationResponse?)> UpdateReservation(int id, ReservationUpdateRequest request)
     {
-         Room? room = await _context.Rooms.FindAsync(request.RoomId);         
+        Reservation? reservation = await _context.Reservations.Where(x => x.Id == id).Include(x => x.Room).FirstOrDefaultAsync();        
+
+        if(reservation is null)
+            return (ReservationStatusResponses.ReservationNotFound, null);       
+
+        Room? room = await _context.Rooms.FindAsync(request.RoomId);
 
         if(room is null)
             return (ReservationStatusResponses.RoomNotFound, null);
@@ -132,26 +148,25 @@ public class ReservationService : IReservationService
         if(!room.IsActive)
             return (ReservationStatusResponses.RoomInactive, null);
 
-        if(request.EndAt < request.StartAt)
+        if(request.EndAt <= request.StartAt)
             return (ReservationStatusResponses.InvalidTimeInterval, null);
 
-        if(room.Reservations.Any(x =>
-        x.StartAt < request.EndAt && x.StartAt > request.StartAt || 
-        x.EndAt > request.StartAt && x.EndAt < request.EndAt))
+        bool hasConflict = await _context.Reservations.AnyAsync(x =>
+        x.Id != id &&
+        x.RoomId == request.RoomId &&
+        x.StartAt < request.EndAt &&
+        x.EndAt > request.StartAt);
+        
+        if(hasConflict)
             return (ReservationStatusResponses.TimeAlreadyReserved, null);       
 
-        Reservation reservation = new Reservation
-        {
-            Title = request.Title,
-            StartAt = request.StartAt,
-            EndAt = request.EndAt,
-            ResponsibleName = request.ResponsibleName,
-            RoomId = request.RoomId,
-            Room = room
-        };
+        reservation.Title = request.Title;
+        reservation.StartAt = request.StartAt;
+        reservation.EndAt = request.EndAt;
+        reservation.ResponsibleName = request.ResponsibleName;
+        reservation.RoomId = request.RoomId;
+        reservation.Room = room;
 
-        _context.Reservations.Add(reservation);
-        
         await _context.SaveChangesAsync();
 
         return (ReservationStatusResponses.Ok, ConvertoToReservationResponse(reservation));
@@ -175,6 +190,7 @@ public class ReservationService : IReservationService
     {
         return new ReservationResponse
         {
+            Id = reservation.Id,
             Title = reservation.Title,
             StartAt = reservation.StartAt,
             EndAt = reservation.EndAt,

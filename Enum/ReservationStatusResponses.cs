@@ -4,5 +4,6 @@ public enum ReservationStatusResponses
     RoomNotFound,
     RoomInactive,
     InvalidTimeInterval,
-    TimeAlreadyReserved
+    TimeAlreadyReserved,
+    ReservationNotFound
 }

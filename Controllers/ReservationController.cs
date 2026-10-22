@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
@@ -12,7 +13,7 @@ public class ReservationController : ControllerBase
     }        
 
     [HttpGet]
-    public async Task<ActionResult<List<ReservationResponse>>> GetAllReservations(int? roomId, string? responsible, string? date, string? orderBy, bool? descendingOrder, int page, int pageSize)
+    public async Task<ActionResult<List<ReservationResponse>>> GetAllReservations(int? roomId, string? responsible, string? date, string? orderBy, bool? descendingOrder, int page = 1, int pageSize = 10)
     {
         var reservations = await _reservationService.GetAllReservations(roomId, responsible, date, orderBy, descendingOrder, page, pageSize);
 
@@ -31,6 +32,7 @@ public class ReservationController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize]
     public async Task<ActionResult<(ReservationStatusResponses, ReservationResponse?)>> CreateNewReservation(ReservationCreateRequest request)
     {
         (ReservationStatusResponses statusResponse, ReservationResponse? reservationResponse) = await _reservationService.CreateNewReservation(request);
@@ -60,15 +62,16 @@ public class ReservationController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize]
     public async Task<ActionResult<(ReservationStatusResponses, ReservationResponse?)>> UpdateReservation(int id, ReservationUpdateRequest request)
     {
         (ReservationStatusResponses statusResponse, ReservationResponse? reservationResponse) = await _reservationService.UpdateReservation(id, request);
 
-        if(reservationResponse is null)
-            return NotFound("Reservation not found");
-
         switch(statusResponse)
         {
+            case ReservationStatusResponses.ReservationNotFound:
+            return NotFound("Reservation not found");
+
             case ReservationStatusResponses.RoomNotFound:
             return NotFound("Room not found");
 
@@ -90,6 +93,7 @@ public class ReservationController : ControllerBase
     } 
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<bool>> DeleteReservation(int id)
     {
         bool deleted = await _reservationService.DeleteReservation(id);
